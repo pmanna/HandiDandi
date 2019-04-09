@@ -6,7 +6,7 @@ LiquidCrystal_I2C lcd(0x27, 16,2);
 #define ROCK  0
 #define PAPER 1
 #define SCISSORS 2
-#define NUM_ROUNDS 10
+#define NUM_ROUNDS 30
 
 int score[2] = {0,0};
 int roundCount;
@@ -78,8 +78,13 @@ void testMoves(int hand)
 
 #endif // TEST_MODE
 
-void keepScore(long left, long right)
+void keepScore(long turn, long left, long right)
 {
+  lcd.setCursor(0, RIGHT_HAND);
+  lcd.printstr("R");
+  lcd.setCursor(2, RIGHT_HAND);
+  lcd.printstr(String(turn).c_str());
+  
   // Same choice, no score
   if (left == right) { return; }
 
@@ -98,7 +103,7 @@ void keepScore(long left, long right)
     else { score[LEFT_HAND]++; }  // Can only be scissors
   }
 
-  lcd.setCursor(13, RIGHT_HAND);
+  lcd.setCursor(14, RIGHT_HAND);
   lcd.printstr(String(score[RIGHT_HAND]).c_str());
   lcd.setCursor(0, LEFT_HAND);
   lcd.printstr(String(score[LEFT_HAND]).c_str());
@@ -118,7 +123,7 @@ void playRock(int hand)
   delay(50);
   
   if (hand == RIGHT_HAND) {
-    lcd.setCursor(4,hand);
+    lcd.setCursor(5,hand);
     lcd.printstr("    Rock");
   } else {
     lcd.setCursor(3,hand);
@@ -140,7 +145,7 @@ void playScissors(int hand)
   delay(50);
   
   if (hand == RIGHT_HAND) {
-    lcd.setCursor(4,hand);
+    lcd.setCursor(5,hand);
     lcd.printstr("Scissors");
   } else {
     lcd.setCursor(3,hand);
@@ -162,7 +167,7 @@ void playPaper(int hand)
   delay(50);
   
   if (hand == RIGHT_HAND) {
-    lcd.setCursor(4,hand);
+    lcd.setCursor(5,hand);
     lcd.printstr("   Paper");
   } else {
     lcd.setCursor(3,hand);
@@ -180,6 +185,11 @@ void setup()
   
   lcd.begin();   // Init the LCD for 16 chars 2 lines
   lcd.backlight();   // Turn on the backligt (try lcd.noBaklight() to turn it off)
+  lcd.clear();
+  lcd.noBlink();
+  lcd.noCursor();
+  
+  blinkMessage("START...", RIGHT_HAND);
   
   randomSeed(analogRead(PA0));
 }
@@ -246,8 +256,8 @@ void loop() {
       break;
   }
 
-  keepScore(leftChoice, rightChoice);
   roundCount++;
+  keepScore(roundCount, leftChoice, rightChoice);
   
   delay(1000);
 }
