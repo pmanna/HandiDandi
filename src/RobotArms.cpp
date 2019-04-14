@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "Hand.h"
 #include "genann.h"
 #include <LiquidCrystal_I2C.h>
@@ -217,7 +218,7 @@ void doTraining()
 
 void doPlaying(long predictedChoice, long rightChoice)
 {
-  long leftChoice;
+  long leftChoice = ROCK ;
   
   resetHand(LEFT_HAND);
   resetHand(RIGHT_HAND);
@@ -294,7 +295,7 @@ void doTests()
 
 void setup() 
 {
-  Serial.begin(9600);
+  Serial.begin(19200);
 
   setupHands();
 
