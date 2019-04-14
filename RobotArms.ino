@@ -1,15 +1,32 @@
 #include "Hand.h"
+#include "genann.h"
 #include <LiquidCrystal_I2C.h>
 
 LiquidCrystal_I2C lcd(0x27, 16,2);
 
+// Game chances
 #define ROCK  0
 #define PAPER 1
 #define SCISSORS 2
-#define NUM_ROUNDS 30
 
+// Game cycles
+#define TRAIN_ROUNDS 100
+#define NUM_ROUNDS 30
+#define END_ROUNDS 5
+#define NUM_INPUTS 10
+
+// States
+#define TRAINING  0
+#define PLAYING   1
+#define ENDGAME   2
+
+int state = TRAINING;
 int score[2] = {0,0};
 int roundCount;
+
+float gameRounds[NUM_ROUNDS + NUM_INPUTS] = {0};
+
+genann *ann = genann_init(NUM_INPUTS, 1, NUM_INPUTS, 1);
 
 void blinkMessage(const char *msg, int row)
 {
@@ -175,28 +192,89 @@ void playPaper(int hand)
   }
 }
 
-void setup() 
+void setupTrainingData()
 {
-  Serial.begin(9600);
-
-  setupHands();
-
-  roundCount = 0;
-  
-  lcd.begin();   // Init the LCD for 16 chars 2 lines
-  lcd.backlight();   // Turn on the backligt (try lcd.noBaklight() to turn it off)
-  lcd.clear();
-  lcd.noBlink();
-  lcd.noCursor();
-  
-  blinkMessage("START...", RIGHT_HAND);
-  
   randomSeed(analogRead(PA0));
+  
+  for (int ii=0; ii<NUM_ROUNDS+NUM_INPUTS; ii++) {
+    gameRounds[ii] = (float)random(3);
+  }
 }
 
-void loop() {
+void doTraining()
+{
+  blinkMessage("TRAINING...", RIGHT_HAND);
+  float *input  = gameRounds;
+  float *output = gameRounds + NUM_INPUTS;
+  
+  for (int ii = 0; ii < NUM_ROUNDS; ii++, input++, output++) {
+    genann_train(ann, input, output, 3);
+  }
+  
+  roundCount++;
+  delay(200);
+}
+
+void doPlaying(long predictedChoice, long rightChoice)
+{
+  long leftChoice;
+  
+  resetHand(LEFT_HAND);
+  resetHand(RIGHT_HAND);
+  delay(1000);
+
+  switch (predictedChoice) {
+    case ROCK:
+      leftChoice = PAPER;
+      playPaper(LEFT_HAND);
+      break;
+    case PAPER:
+      leftChoice = SCISSORS;
+      playScissors(LEFT_HAND);
+      break;
+    case SCISSORS:
+      leftChoice = ROCK;
+      playRock(LEFT_HAND);
+      break;
+  }
+  
+  switch (rightChoice) {
+    case ROCK:
+      playRock(RIGHT_HAND);
+      break;
+    case PAPER:
+      playPaper(RIGHT_HAND);
+      break;
+    case SCISSORS:
+      playScissors(RIGHT_HAND);
+      break;
+  }
+  
+  keepScore(roundCount, leftChoice, rightChoice);
+  
+  roundCount++;
+  delay(1000);
+}
+
+void doEndgame()
+{
+  resetHand(LEFT_HAND);
+  resetHand(RIGHT_HAND);
+  delay(1000);
+  
+  if (score[LEFT_HAND] > score[RIGHT_HAND]) {
+    OKMove(LEFT_HAND);
+  } else if (score[RIGHT_HAND] > score[LEFT_HAND]) {
+    OKMove(RIGHT_HAND);
+  }
+  
+  roundCount++;
+  delay(3000);
+}
 
 #ifdef TEST_MODE
+void doTests()
+{
   testMoves(RIGHT_HAND);
   resetHand(RIGHT_HAND);
   testMoves(LEFT_HAND);
@@ -211,53 +289,73 @@ void loop() {
   
   delay(1000);
   */
+}
+#endif
+
+void setup() 
+{
+  Serial.begin(9600);
+
+  setupHands();
+
+  lcd.begin();   // Init the LCD for 16 chars 2 lines
+  lcd.backlight();   // Turn on the backligt (try lcd.noBaklight() to turn it off)
+  lcd.clear();
+  lcd.noBlink();
+  lcd.noCursor();
+  
+  blinkMessage("START...", RIGHT_HAND);
+  delay(500);
+  blinkMessage("START...", RIGHT_HAND);
+  delay(500);
+  
+  setupTrainingData();
+}
+
+void loop() {
+
+#ifdef TEST_MODE
+  doTests();
+  return;
 #endif
   
-  resetHand(LEFT_HAND);
-  resetHand(RIGHT_HAND);
-  delay(1000);
-
-  if (roundCount >= NUM_ROUNDS) {
-    if (score[LEFT_HAND] > score[RIGHT_HAND]) {
-      OKMove(LEFT_HAND);
-    } else if (score[RIGHT_HAND] > score[LEFT_HAND]) {
-      OKMove(RIGHT_HAND);
+  // Check if state has to change
+  switch (state) {
+  case TRAINING:
+    if (roundCount >= TRAIN_ROUNDS) {
+      state = PLAYING;
+      score[0] = 0;
+      score[1] = 0;
+      roundCount = 0;
     }
-    delay(3000);
-    return;
+    break;
     
+  case PLAYING:
+    if (roundCount >= NUM_ROUNDS) {
+      state = ENDGAME;
+      roundCount = 0;
+    }
+    break;
+    
+  case ENDGAME:
+    if (roundCount >= END_ROUNDS) {
+      state = TRAINING;
+      roundCount = 0;
+      
+      setupTrainingData();
+    }
+    break;
   }
   
-  long leftChoice = random(3);
-
-  switch (leftChoice) {
-    case ROCK:
-      playRock(LEFT_HAND);
-      break;
-    case PAPER:
-      playPaper(LEFT_HAND);
-      break;
-    case SCISSORS:
-      playScissors(LEFT_HAND);
-      break;
+  switch(state) {
+  case TRAINING:
+    doTraining();
+    break;
+  case PLAYING:
+    doPlaying((long)(*genann_run(ann, gameRounds+roundCount)),(long)gameRounds[roundCount+NUM_INPUTS]);
+    break;
+  case ENDGAME:
+    doEndgame();
+    break;
   }
-  
-  long rightChoice = random(3);
-
-  switch (rightChoice) {
-    case ROCK:
-      playRock(RIGHT_HAND);
-      break;
-    case PAPER:
-      playPaper(RIGHT_HAND);
-      break;
-    case SCISSORS:
-      playScissors(RIGHT_HAND);
-      break;
-  }
-
-  roundCount++;
-  keepScore(roundCount, leftChoice, rightChoice);
-  
-  delay(1000);
 }
