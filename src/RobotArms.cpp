@@ -2,7 +2,7 @@
 #include "Hand.h"
 #include "genann.h"
 
-#define DEBUG
+//#define DEBUG
 
 #ifndef DEBUG
 #include <LiquidCrystal_I2C.h>
@@ -16,7 +16,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define SCISSORS 2
 
 // Game cycles
-#define TRAIN_ROUNDS 500
+#define TRAIN_ROUNDS 300
 #define NUM_ROUNDS 30
 #define END_ROUNDS 5
 #define NUM_INPUTS 10
@@ -26,6 +26,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define PLAYING 1
 #define ENDGAME 2
 
+float learningRate = 0.1;
 int state = TRAINING;
 int score[2] = {0, 0};
 int roundCount;
@@ -120,12 +121,12 @@ void keepScore(long turn, long left, long right)
 {
 #ifdef DEBUG
   Serial.print("Turn: ");
-  Serial.println(turn);
+  Serial.println(turn + 1);
 #else
   lcd.setCursor(0, RIGHT_HAND);
   lcd.printstr("R");
   lcd.setCursor(2, RIGHT_HAND);
-  lcd.printstr(String(turn).c_str());
+  lcd.printstr(String(turn + 1).c_str());
 #endif
 
   // Same choice, no score
@@ -297,7 +298,7 @@ void setupTrainingData()
 
   for (int ii = 0; ii < NUM_ROUNDS + NUM_INPUTS; ii++)
   {
-    gameRounds[ii] = (float)random(3);
+    gameRounds[ii] = (float)(random(3) / 3.0);
   }
 }
 
@@ -310,7 +311,7 @@ void doTraining()
 
   for (int ii = 0; ii < NUM_ROUNDS; ii++, input++, output++)
   {
-    genann_train(ann, input, output, 3);
+    genann_train(ann, input, output, learningRate);
   }
 
   roundCount++;
@@ -447,6 +448,9 @@ void loop()
         score[0] = 0;
         score[1] = 0;
         roundCount = 0;
+#ifndef DEBUG
+        lcd.clear();
+#endif
       }
       break;
 
@@ -475,10 +479,14 @@ void loop()
       doTraining();
       break;
     case PLAYING:
+      {
+        float prediction = *genann_run(ann, gameRounds + roundCount);
+
 #ifdef DEBUG
-      Serial.println("Calculating...");
+        Serial.print("Prediction: "); Serial.println(prediction);
 #endif
-      doPlaying((long)(*genann_run(ann, gameRounds + roundCount)), (long)gameRounds[roundCount + NUM_INPUTS]);
+        doPlaying((long)(prediction * 3.0), (long)(gameRounds[roundCount + NUM_INPUTS] * 3.0));
+      }
       break;
     case ENDGAME:
       doEndgame();
